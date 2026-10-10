@@ -27,21 +27,26 @@ const materials = { cobble: mat(cob, { strength: 3 }), grass: mat(grs, { strengt
 const woodMat = mat(wd, { strength: 2 });
 
 // ---------- diorama layout: a lane-shaped arena along X ----------
-const W = 24, D = 13;
+const W = 24, D = 17, OFF = 4; // OFF rows of tall backdrop behind the lane
 const heights = [], tops = [];
 for (let j = 0; j < D; j++) {
   heights.push([]); tops.push([]);
   for (let i = 0; i < W; i++) {
     let h = 0, t = 'grass';
-    if (j <= 2) h = 3;                       // back ledge
-    else if (j === 3) h = (i > 7 && i < 11) ? 2 : (i % 7 === 0 ? 2 : 1); // broken step
-    else if (j >= 4 && j <= 8) t = 'cobble'; // fighting lane
-    if (j >= 11) h = -1;                     // front drop toward the camera
-    if (j === 3 && i >= 15 && i <= 17) h = 3;
+    const jj = j - OFF;
+    if (jj < 0) h = 7 + (jj < -2 ? 3 : 0) + ((i * 7 + j * 3) % 5 === 0 ? 1 : 0); // backdrop cliffs
+    else if (jj <= 2) h = 3;                       // back ledge
+    else if (jj === 3) h = (i > 7 && i < 11) ? 2 : (i % 7 === 0 ? 2 : 1); // broken step
+    else if (jj >= 4 && jj <= 8) t = 'cobble'; // fighting lane
+    if (jj >= 11) h = -1;                     // front drop toward the camera
+    if (jj === 3 && i >= 15 && i <= 17) h = 3;
     heights[j].push(h); tops[j].push(t);
   }
 }
-scene.add(buildTerrain({ heights, tops, materials }));
+const Z0 = -OFF; // shift so the lane keeps its coordinates
+const terrain = buildTerrain({ heights, tops, materials });
+terrain.position.z = Z0;
+scene.add(terrain);
 
 // props: crates, lantern posts
 scene.add(box(0.9, 0.9, 0.9, woodMat, { x: 4.6, y: 0, z: 9.6 }));
@@ -65,16 +70,16 @@ lantern(8.5, 4.3);
 lantern(16.5, 9.4);
 
 // ---------- light: warm low sun + cool sky fill ----------
-const sun = new THREE.DirectionalLight('#ffcf9a', 2.6);
-sun.position.set(engine.target.x - 9, 11, engine.target.z - 6);
+const sun = new THREE.DirectionalLight('#ffc888', 4.6);
+sun.position.set(engine.target.x - 10, 11, engine.target.z + 3);
 sun.target.position.copy(engine.target);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 const sc = sun.shadow.camera;
-sc.left = -16; sc.right = 16; sc.top = 12; sc.bottom = -12; sc.near = 1; sc.far = 50;
+sc.left = -18; sc.right = 18; sc.top = 16; sc.bottom = -16; sc.near = 1; sc.far = 50;
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 2.5;
 scene.add(sun, sun.target);
-scene.add(new THREE.HemisphereLight('#8aa4e8', '#5a3a2a', 0.85));
+scene.add(new THREE.HemisphereLight('#7f9ae0', '#4a3022', 0.7));
 
 // ---------- fighters (hand-made placeholder pixel art) ----------
 const px = frameToPixels(FRAME, PALETTE);
@@ -84,6 +89,10 @@ const b = new Sprite3D(px, { pivotX: 0.42, flip: true });
 b.position.set(13.4, 0, 6.2);
 scene.add(a, b);
 const sprites = [a, b];
+
+// ?zoom=1 : close-up camera for inspecting sprites
+const q = new URLSearchParams(location.search);
+if (q.get('zoom')) { engine.distance = 11; engine.target.set(12, 1.2, 6.4); engine.updateCamera(); }
 
 engine.onUpdate((dt, t) => {
   for (const s of sprites) s.face(engine.camera);

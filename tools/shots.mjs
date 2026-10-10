@@ -8,14 +8,16 @@ let chromium;
 try { ({ chromium } = await import('playwright')); }
 catch { ({ chromium } = await import('/opt/node22/lib/node_modules/playwright/index.mjs')); }
 
-const args = Object.fromEntries(process.argv.slice(2).map((a) => a.split('=')));
+const args = Object.fromEntries(process.argv.slice(2).map((a) => [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)]));
 const name = args.name || 'scene';
 const url = args.url || '/index.html';
 const wait = Number(args.wait || 1500);
 const port = 5199;
 fs.mkdirSync('shots', { recursive: true });
 
-const vite = spawn('npx', ['vite', '--port', String(port), '--strictPort'], { stdio: 'pipe' });
+const vite = spawn('npx', ['vite', '--port', String(port), '--strictPort'], { stdio: 'pipe', detached: true });
+const stopVite = () => { try { process.kill(-vite.pid); } catch { /* already gone */ } };
+process.on('exit', stopVite);
 await new Promise((res, rej) => {
   const to = setTimeout(() => rej(new Error('vite did not start')), 30000);
   vite.stdout.on('data', (d) => { if (String(d).includes('Local')) { clearTimeout(to); res(); } });
@@ -32,4 +34,5 @@ const out = path.join('shots', `${name}.png`);
 await page.screenshot({ path: out });
 console.log('saved', out);
 await browser.close();
-vite.kill();
+stopVite();
+process.exit(0);

@@ -10,7 +10,7 @@ export class Engine {
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 1.05;
     r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(r.domElement);
     this.scene = new THREE.Scene();
     // Diorama camera: narrow FOV, far away, looking down ~30 degrees, perpendicular to the arena's X axis

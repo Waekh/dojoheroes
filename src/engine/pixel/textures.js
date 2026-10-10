@@ -42,7 +42,7 @@ const LIGHT = [-0.55, -0.75]; // texture-space light (upper-left), for baked mic
 
 /** Cobblestone road: irregular stones, dark mortar, a little moss and cracks. */
 export function cobblestone(seed = 1) {
-  const S = 64, cell = 8;
+  const S = 128, cell = 8;
   const pc = new PixelCanvas(S, S);
   const R = rng(seed);
   const n = S / cell;
@@ -70,7 +70,7 @@ export function cobblestone(seed = 1) {
     const { d1, d2, p } = near(x + 0.5, y + 0.5);
     const edge = d2 - d1;
     if (edge < 1.25) {
-      const m = tfbm(x / 6, y / 6, 64 / 6 | 0, seed + 5);
+      const m = tfbm(x / 8, y / 8, S / 8, seed + 5);
       pc.set(x, y, m > 0.62 ? (hash2(x, y, seed) > 0.5 ? moss : mossL) : shade(mortar, (hash2(x, y, 9) - 0.5) * 0.3));
       pc.setH(x, y, 0);
       continue;
@@ -86,7 +86,7 @@ export function cobblestone(seed = 1) {
     const gx = pc.getH(x + 1, y) - pc.getH(x - 1, y), gy = pc.getH(x, y + 1) - pc.getH(x, y - 1);
     const lit = -(gx * LIGHT[0] + gy * LIGHT[1]);
     let k = lit > 0.25 ? 0.5 : lit > 0.06 ? 0.2 : lit < -0.25 ? -0.55 : lit < -0.06 ? -0.25 : 0;
-    k += (p.tint - 0.5) * 0.2 + (tfbm(x / 3, y / 3, 64 / 3 | 0, seed + 11) - 0.5) * 0.35;
+    k += (p.tint - 0.5) * 0.2 + (tfbm(x / 4, y / 4, S / 4, seed + 11) - 0.5) * 0.35;
     let c = shade(p.c, k);
     if (hash2(x, y, seed + 3) > 0.985) c = shade(p.c, -0.6); // pits
     pc.set(x, y, c);
@@ -102,40 +102,47 @@ export function cobblestone(seed = 1) {
   return pc;
 }
 
-/** Lush grass top with blades, clover and tiny flowers. */
+/** Lush grass top: painterly clumps lit from the upper-left, a few flowers in small clusters. */
 export function grass(seed = 2) {
-  const S = 64;
+  const S = 128;
   const pc = new PixelCanvas(S, S);
   const R = rng(seed);
-  const G = ['#2f5a2a', '#3d6e2e', '#4f8434', '#66983c', '#86b04a', '#a8c860'].map(hex);
+  const G = ['#264a26', '#33602b', '#447a30', '#5a9236', '#78aa42', '#9cc456'].map(hex);
+  // soft base: large-scale variation only
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const n = tfbm(x / 10, y / 10, 64 / 10 | 0, seed) * 0.7 + tfbm(x / 3, y / 3, 64 / 3 | 0, seed + 3) * 0.3;
-    const i = Math.max(0, Math.min(3, Math.floor(n * 4.2 - 0.6)));
-    pc.set(x, y, G[i]);
-    pc.setH(x, y, n * 0.3);
+    const n = tfbm(x / 16, y / 16, S / 16, seed);
+    pc.set(x, y, G[n > 0.55 ? 2 : 1]);
+    pc.setH(x, y, 0.1);
   }
-  // blades: 3-4 px strokes, dark root -> bright tip
-  for (let k = 0; k < 900; k++) {
-    const x = Math.floor(R() * S), y = Math.floor(R() * S);
-    const len = 2 + Math.floor(R() * 3);
-    const lean = R() < 0.5 ? 0 : (R() < 0.5 ? -1 : 1);
-    for (let j = 0; j < len; j++) {
-      const t = j / (len - 1);
-      const xx = x + (j === len - 1 ? lean : 0), yy = y - j;
-      pc.set(xx, yy, G[Math.min(5, 1 + Math.round(t * 3 + (R() < 0.3 ? 1 : 0)))]);
-      pc.setH(xx, yy, 0.4 + t * 0.6);
+  // clumps: rounded tufts with a bright top-left rim and a dark bottom-right underside
+  for (let k = 0; k < 480; k++) {
+    const cx = R() * S, cy = R() * S, r = 2.2 + R() * 3.2;
+    const tone = R() < 0.3 ? 1 : 0;
+    for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y++) for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x++) {
+      const dx = x + 0.5 - cx, dy = (y + 0.5 - cy) * 1.25;
+      const d = Math.hypot(dx, dy) + (hash2(x, y, seed + k) - 0.5) * 1.1;
+      if (d > r) continue;
+      const lit = -(dx * 0.6 + dy * 0.8) / r;
+      let i = 2 + tone + (lit > 0.45 ? 2 : lit > 0.05 ? 1 : 0);
+      if (d > r - 1 && lit < -0.2) i = 1;
+      pc.set(x, y, G[Math.min(5, i)]);
+      pc.setH(x, y, 0.3 + (1 - d / r) * 0.6);
     }
   }
-  // flowers & clover
-  const F = [['#f4f0e6', '#e8c840'], ['#f2a8c8', '#fff0a0'], ['#a8c8ff', '#ffffff'], ['#ffd860', '#e88a20']].map((p) => p.map(hex));
-  for (let k = 0; k < 26; k++) {
+  // a few individual blade tips
+  for (let k = 0; k < 560; k++) {
     const x = Math.floor(R() * S), y = Math.floor(R() * S);
+    pc.set(x, y, G[5]); pc.set(x, y + 1, G[3]);
+  }
+  // small flower clusters
+  const F = [['#f4f0e6', '#e8c840'], ['#f2a8c8', '#fff0a0'], ['#ffd860', '#e88a20']].map((p) => p.map(hex));
+  for (let c = 0; c < 9; c++) {
+    const cx = R() * S, cy = R() * S;
     const [petal, core] = F[Math.floor(R() * F.length)];
-    if (R() < 0.6) {
-      pc.set(x - 1, y, petal); pc.set(x + 1, y, petal); pc.set(x, y - 1, petal); pc.set(x, y + 1, shade(petal, -0.3)); pc.set(x, y, core);
-      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [0, 0]]) pc.setH(x + dx, y + dy, 0.9);
-    } else {
-      pc.set(x, y, petal); pc.setH(x, y, 0.8);
+    for (let k = 0; k < 4; k++) {
+      const x = Math.floor(cx + (R() - 0.5) * 8), y = Math.floor(cy + (R() - 0.5) * 6);
+      pc.set(x - 1, y, petal); pc.set(x + 1, y, petal); pc.set(x, y - 1, petal); pc.set(x, y + 1, shade(petal, -0.35)); pc.set(x, y, core);
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [0, 0]]) pc.setH(x + dx, y + dy, 1);
     }
   }
   return pc;

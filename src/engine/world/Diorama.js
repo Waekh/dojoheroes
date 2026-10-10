@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { LEVEL } from '../constants.js';
 
-const TEX_UNITS = 4; // one 64px texture covers 4x4 world units (16 px / unit)
+const TEX_UNITS = 4; // a 64px texture covers 4x4 world units (16 px / unit)
+const texUnits = (m) => (m.map && m.map.image ? m.map.image.width / 16 : TEX_UNITS);
 
 /**
  * Block terrain for the diorama. heights[j][i] is in terrain levels, tops[j][i] a material key.
@@ -19,8 +20,9 @@ export function buildTerrain({ heights, tops, materials, base = -3 }) {
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const y = hAt(i, j);
     const top = get(tops[j][i]);
+    const U = texUnits(materials[tops[j][i]]);
     quad(top, [[i, y, j + 1], [i + 1, y, j + 1], [i + 1, y, j], [i, y, j]], [0, 1, 0],
-      [[i / TEX_UNITS, -(j + 1) / TEX_UNITS], [(i + 1) / TEX_UNITS, -(j + 1) / TEX_UNITS], [(i + 1) / TEX_UNITS, -j / TEX_UNITS], [i / TEX_UNITS, -j / TEX_UNITS]]);
+      [[i / U, -(j + 1) / U], [(i + 1) / U, -(j + 1) / U], [(i + 1) / U, -j / U], [i / U, -j / U]]);
     const side = get('cliff');
     const sides = [
       { n: [0, 0, 1], nb: hAt(i, j + 1), a: [i, j + 1], b: [i + 1, j + 1], u0: i },
