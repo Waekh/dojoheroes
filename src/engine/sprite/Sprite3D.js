@@ -30,6 +30,22 @@ export function frameToPixels(rows, palette) {
   return pc;
 }
 
+/** normal map straight from the renderer's view-space normals (softened: shading is partly baked) */
+function normalsTexture(pc, amount = 0.6) {
+  const { w, h, normals, mask } = pc;
+  const data = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x, o = ((h - 1 - y) * w + x) * 4; // DataTexture rows start at the bottom
+    let n = [0, 0, 1];
+    if (mask[i] >= 0) n = [normals[i * 3] * amount, normals[i * 3 + 1] * amount, 1 - amount + normals[i * 3 + 2] * amount];
+    const l = Math.hypot(n[0], n[1], n[2]) || 1;
+    data[o] = (n[0] / l * 0.5 + 0.5) * 255; data[o + 1] = (n[1] / l * 0.5 + 0.5) * 255; data[o + 2] = (n[2] / l * 0.5 + 0.5) * 255; data[o + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, w, h);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.needsUpdate = true;
+  return t;
+}
+
 /**
  * A pixel-art character standing upright in the 3D diorama.
  * - faces the camera (rotates around Y only)
@@ -37,15 +53,16 @@ export function frameToPixels(rows, palette) {
  * - alpha-tested, casts a real shadow, plus a soft contact shadow
  */
 export class Sprite3D extends THREE.Group {
-  constructor(pixels, { pivotX = 0.5, flip = false } = {}) {
+  constructor(pixels, { pivotX = 0.5, pivotY = 0, flip = false } = {}) {
     super();
     const w = pixels.w / PPU, h = pixels.h / PPU;
     const map = pixels.toTexture({ repeat: false });
     map.minFilter = THREE.NearestFilter; map.generateMipmaps = false;
-    const normalMap = pixels.toNormalTexture({ strength: 1.6, wrap: false });
+    // volumetric sprites carry their real per-pixel normals; hand-made ones get a bevel from the silhouette
+    const normalMap = pixels.normals ? normalsTexture(pixels) : pixels.toNormalTexture({ strength: 1.6, wrap: false });
     normalMap.minFilter = THREE.NearestFilter; normalMap.generateMipmaps = false;
     const geo = new THREE.PlaneGeometry(w, h);
-    geo.translate((0.5 - pivotX) * w, h / 2, 0);
+    geo.translate((0.5 - pivotX) * w, h / 2 - pivotY * h, 0); // pivotY: feet height (fraction from the bottom)
     this.uniforms = { uNormalUp: { value: 0.45 }, uFlash: { value: 0 } };
     const mat = new THREE.MeshLambertMaterial({ map, normalMap, alphaTest: 0.5, side: THREE.DoubleSide });
     mat.normalScale.set(1, 1);

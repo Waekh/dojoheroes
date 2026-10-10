@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Sprite lab</title>
+<style>
+  body { margin: 0; background: #2b2836; color: #ddd; font: 13px sans-serif; display: flex; flex-wrap: wrap; gap: 18px; padding: 16px; align-items: flex-end; }
+  canvas { image-rendering: pixelated; display: block; }
+  figure { margin: 0; } figcaption { margin-top: 4px; color: #aaa; }
+</style>
+</head>
+<body>
+<script type="module">
+  import { renderSprite } from '/src/engine/sprite/sdfRender.js';
+  import { KARATEKA, POSES } from '/src/game/fighters/karateka.js';
+  const q = new URLSearchParams(location.search);
+  const big = Number(q.get('big') || 7);
+  const add = (src, k, cap, bg = '#b9ac8f') => {
+    const c = document.createElement('canvas');
+    c.width = src.width * k; c.height = src.height * k;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    g.fillStyle = bg; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(src, 0, 0, c.width, c.height);
+    const f = document.createElement('figure'); f.appendChild(c);
+    const fc = document.createElement('figcaption'); fc.textContent = cap; f.appendChild(fc);
+    document.body.appendChild(f);
+  };
+  const t0 = performance.now();
+  const sheets = Object.entries(POSES).map(([name, pose]) => [name, renderSprite(KARATEKA, pose).toCanvas()]);
+  const ms = Math.round((performance.now() - t0) / sheets.length);
+  add(sheets[0][1], big, `garde x${big} (${ms} ms/frame)`);
+  for (const [name, c] of sheets) add(c, 3, name + ' x3');
+  for (const [name, c] of sheets) add(c, 1, name + ' x1');
+  window.__ready = true;
+</script>
+</body>
+</html>

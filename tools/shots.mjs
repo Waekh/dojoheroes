@@ -24,7 +24,7 @@ await new Promise((res, rej) => {
 });
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+const page = await browser.newPage({ viewport: { width: Number(args.w || 1920), height: Number(args.h || 1080) } });
 page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log(m.type(), m.text()); });
 await page.goto(`http://localhost:${port}${url}`);
