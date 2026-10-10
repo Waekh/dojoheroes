@@ -29,9 +29,13 @@
   const sheets = Object.entries(POSES).map(([name, pose]) => [name, renderSprite(KARATEKA, pose).toCanvas()]);
   const ms = Math.round((performance.now() - t0) / sheets.length);
   add(sheets[0][1], big, `garde x${big} (${ms} ms/frame)`);
-  for (const [name, c] of sheets) add(c, 3, name + ' x3');
-  for (const [name, c] of sheets) add(c, 1, name + ' x1');
-  window.__ready = true;
+  for (const [name, c] of sheets) add(c, 4, name + ' x4');
+  for (const [name, c] of sheets) add(c, 2, name + ' x2');
+  // reference (local only, shots/ is git-ignored), shown at the same zoom for comparison
+  const ref = new Image();
+  ref.onload = () => { add(ref, 2, 'référence x2', '#fff'); window.__ready = true; };
+  ref.onerror = () => { window.__ready = true; };
+  ref.src = '/shots/ref.png';
 </script>
 </body>
 </html>

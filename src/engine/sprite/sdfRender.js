@@ -70,7 +70,11 @@ export function renderSprite(model, pose, o = {}) {
   const built = model.build(pose);
   const matNames = Object.keys(model.materials);
   const matIndex = Object.fromEntries(matNames.map((m, i) => [m, i]));
-  const mats0 = matNames.map((m) => ({ ao: model.materials[m].ao ?? 0.45 }));
+  const mats0 = matNames.map((m) => {
+    const d = model.materials[m];
+    return { ao: d.ao ?? 0.45, wrap: d.wrap ?? 0.3, spec: d.spec ?? 0, amb: d.amb ?? 0.18 };
+  });
+  const Hv = norm(add(L, [0, 0, 1])); // half vector for the view direction (camera looks down -z)
 
   // convert parts to view space and compute bounding spheres
   const parts = built.parts.map((part, pi) => {
@@ -154,7 +158,6 @@ export function renderSprite(model, pose, o = {}) {
         wgt *= 0.6;
       }
       ao = Math.max(0, Math.min(1, 1 - ao * 0.22));
-      const diff = Math.max(0, (dot(n, L) + 0.3) / 1.3);
       let mi = part.mi;
       if (part.skin) {
         const m = part.skin(mv(Rt, p), n);
@@ -162,8 +165,10 @@ export function renderSprite(model, pose, o = {}) {
       }
       const si = (py * w + px) * samples + sy * SS + sx;
       sMat[si] = mi; sPart[si] = part.id;
-      const aoK = mats0[mi].ao;
-      sLight[si] = (0.18 + 0.82 * diff) * (1 - aoK + aoK * ao);
+      const mt = mats0[mi];
+      const diff = Math.max(0, (dot(n, L) + mt.wrap) / (1 + mt.wrap));
+      const spec = mt.spec ? mt.spec * Math.pow(Math.max(0, dot(n, Hv)), 10) : 0;
+      sLight[si] = Math.min(1, (mt.amb + (1 - mt.amb) * diff) * (1 - mt.ao + mt.ao * ao) + spec);
       sDepth[si] = z;
       sNorm[si * 3] = n[0]; sNorm[si * 3 + 1] = n[1]; sNorm[si * 3 + 2] = n[2];
     }
@@ -243,12 +248,12 @@ export function renderSprite(model, pose, o = {}) {
       const sameMat = pMat[j] === pMat[i];
       const lnk = built.joined?.(parts[pPart[i]], parts[pPart[j]]);
       if (lnk) continue;
-      if ((sameMat && dz > 0.9) || (!sameMat && dz > 0.35)) { lineAt[i] = 1; break; }
+      if (dz > (sameMat ? 0.5 : 0.2)) { lineAt[i] = 1; break; }
     }
   }
   for (let i = 0; i < N; i++) if (lineAt[i]) {
     const m = mats[pMat[i]];
-    col[i] = m.lineInner ? m.lineInner : mix(m.ramp[m.ramp.length - 1], m.line, 0.5);
+    col[i] = mix(m.ramp[m.ramp.length - 1], m.line, 0.65);
   }
 
   // ---- exterior outline ----

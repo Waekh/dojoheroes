@@ -59,12 +59,16 @@ export class Sprite3D extends THREE.Group {
     const map = pixels.toTexture({ repeat: false });
     map.minFilter = THREE.NearestFilter; map.generateMipmaps = false;
     // volumetric sprites carry their real per-pixel normals; hand-made ones get a bevel from the silhouette
-    const normalMap = pixels.normals ? normalsTexture(pixels) : pixels.toNormalTexture({ strength: 1.6, wrap: false });
+    const normalMap = pixels.normals ? normalsTexture(pixels, 0.3) : pixels.toNormalTexture({ strength: 1.6, wrap: false });
     normalMap.minFilter = THREE.NearestFilter; normalMap.generateMipmaps = false;
     const geo = new THREE.PlaneGeometry(w, h);
     geo.translate((0.5 - pivotX) * w, h / 2 - pivotY * h, 0); // pivotY: feet height (fraction from the bottom)
     this.uniforms = { uNormalUp: { value: 0.45 }, uFlash: { value: 0 } };
     const mat = new THREE.MeshLambertMaterial({ map, normalMap, alphaTest: 0.5, side: THREE.DoubleSide });
+    if (pixels.normals) {
+      // shading is already painted into the sprite: the scene only tints it, so keep part of it self-lit
+      mat.emissive.set('#ffffff'); mat.emissiveMap = map; mat.emissiveIntensity = 0.38;
+    }
     mat.normalScale.set(1, 1);
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.uniforms);
