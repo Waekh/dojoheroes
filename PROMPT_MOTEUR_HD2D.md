@@ -1,8 +1,8 @@
-# Prompt — Moteur graphique HD-2D « au plus proche d'Octopath Traveler »
+# Prompt — Jeu HD-2D « au plus proche d'Octopath Traveler » avec le gameplay de Little Fighter 2
 
 > Prompt destiné à Claude pour la prochaine session d'implémentation.
-> Périmètre : **uniquement le moteur graphique** (rendu, environnement, sprites, animations, lumière, post-process).
-> Aucun gameplay, sauf ce qu'il faut pour se déplacer dans la scène et montrer les animations.
+> Périmètre : le **moteur graphique** (rendu, environnement, sprites, animations, lumière, post-process) **et le gameplay principal : un beat'em up à la Little Fighter 2** (LF2).
+> La priorité absolue reste le rendu visuel. Le gameplay LF2 est l'élément de jeu central qui s'appuie sur ce moteur.
 
 ---
 
@@ -16,6 +16,8 @@ Construis un moteur de rendu web **HD-2D** dont les images doivent être, au max
 - des lumières dynamiques, des ombres portées, un flou de profondeur très marqué (tilt-shift / bokeh), du bloom, un étalonnage chaud et un fort vignettage.
 
 Le critère de réussite est **visuel** : à chaque étape, des captures du moteur sont comparées côte à côte avec des captures d'Octopath Traveler. Tant que l'écart est visible, on itère.
+
+Sur ce moteur, implémente le **gameplay de Little Fighter 2** : un combat 2.5D en temps réel dans une arène à défilement latéral (axe X), avec de la profondeur (axe Z) et des sauts (axe Y). Le jeu se joue en solo et jusqu'à 4 joueurs en local, contre l'IA ou entre joueurs. La « sensation » doit être celle de LF2 (voir §5), et l'image celle d'Octopath.
 
 ## 2. Référence open source à étudier : Lumina
 
@@ -47,13 +49,17 @@ Le critère de réussite est **visuel** : à chaque étape, des captures du mote
   - personnages de **32 à 48 px de haut**, proportions d'environ 3 à 3,5 têtes ;
   - vue 3/4, palettes riches et décalées en teinte (ombres vers le bleu/violet, lumières vers le jaune) ;
   - contours sombres sélectifs, pas d'anti-aliasing, 4 à 5 tons par matériau.
-- **Directions** : 4 au minimum (bas, haut, gauche, droite ; la droite peut être un miroir de la gauche), 8 en option.
-- **Animations** (nombre d'images / FPS cible) :
-  - repos (respiration) : 4 à 6 images à 6-8 fps ;
-  - marche : 6 à 8 images à 10-12 fps ; course : 6 à 8 images à 14 fps ;
-  - attaque : anticipation, impact (avec un « smear » sur 1 image) et récupération, 6 à 10 images ;
-  - incantation : 6 images avec boucle ; dégât : 2 à 3 images avec flash blanc ; K.O. : 4 images ; victoire : 4 à 6 images.
-  - Chaque image a sa propre durée (timing non uniforme), et les animations déclenchent des événements (par exemple « impact », « pas »).
+- **Directions** : comme dans LF2, les combattants sont vus **de profil, en 3/4**, et regardent à **gauche ou à droite** (la droite est le miroir de la gauche). Les directions haut et bas ne sont pas nécessaires pour les combattants. Elles restent en option pour d'éventuels PNJ de décor.
+- **Animations** : le jeu de mouvements complet d'un personnage LF2, avec la finition d'Octopath (nombre d'images indicatif) :
+  - repos (respiration) : 4 à 6 images ; marche : 6 à 8 ; course : 6 à 8 ; freinage : 2 ;
+  - saut : préparation, montée, descente et réception ; saut en course (« dash jump ») avec salto ;
+  - coups de poing alternés A et B (3 à 4 images chacun), « super punch » sur un adversaire étourdi, attaque sautée, attaque en course, attaque en saut de course ;
+  - défense, roulade (« roll ») ;
+  - saisie, coups pendant la saisie, projection ;
+  - dégâts (2 variantes), étourdissement (« dizzy », en boucle), chute en arrière et en avant, au sol, relevé ;
+  - 3 à 5 animations de techniques spéciales par personnage, plus les projectiles et effets associés ; victoire.
+  - Les anticipations et impacts sont marqués, avec un « smear » sur 1 image à l'impact.
+  - Chaque image a sa propre durée (timing non uniforme) et peut porter des **données de combat** (voir §5.2) et des événements (« impact », « pas », « son »).
 - **Rendu d'un sprite** : un quad qui tourne uniquement autour de l'axe vertical pour faire face à la caméra, avec découpe alpha nette (alpha test, pas de transparence floue) et pieds ancrés au sol.
   - Une **normal map générée automatiquement** depuis le sprite : hauteur dérivée de la distance au bord et de la luminance, avec un biseau de 1 à 2 px.
   - Le sprite est éclairé par le soleil et les point lights, avec une **lumière de contour** venant des sources proches.
@@ -73,8 +79,9 @@ Le critère de réussite est **visuel** : à chaque étape, des captures du mote
 - **Ciel** en dégradé avec nuages, brouillard de distance coloré selon l'heure.
 
 ### 4.3 Caméra
-- Perspective, FOV 26-30°, inclinaison 30-35°, distance d'environ 18 à 25 unités, suivi amorti, légère rotation et zoom optionnels.
-- Ce cadrage donne l'impression de regarder une maquette.
+- Perspective, FOV 26-30°, inclinaison 25-35°, distance d'environ 18 à 25 unités. Ce cadrage donne l'impression de regarder une maquette.
+- **Adaptée au combat LF2** : la caméra regarde perpendiculairement à l'axe X de l'arène, comme une vue de côté plongeante. Elle **défile latéralement** en suivant le centre des joueurs, avec un suivi amorti, et reste dans les limites du niveau. Elle peut zoomer légèrement pour garder tous les joueurs à l'écran.
+- La bande de netteté du DOF est centrée sur la profondeur de l'aire de combat. Le premier plan (décor devant l'arène) et le fond restent flous.
 
 ### 4.4 Lumière
 - **Soleil ou lune directionnel** chaud, avec ombres douces (PCF), et lumière d'ambiance hémisphérique froide.
@@ -94,16 +101,54 @@ Tous les paramètres sont réglables en direct depuis un panneau de debug.
 ### 4.6 Atmosphère
 Poussières en suspension qui scintillent dans la lumière, lucioles la nuit, feuilles qui tombent, fumée de cheminée, braises de feu de camp, pluie et neige en option. Toutes les particules sont en pixel art (carrés nets), et éclairées.
 
-## 5. Jalons (chacun validé par l'utilisateur sur captures)
+## 5. Gameplay principal : Little Fighter 2
+
+Reproduis fidèlement les **mécaniques et la sensation de LF2** (version 2.0), avec des personnages et un contenu originaux (pas de reprise des personnages ni des sprites de LF2).
+
+### 5.1 Contrôles et commandes
+- 7 boutons par joueur : 4 directions, **Attaque (A)**, **Saut (J)**, **Défense (D)**. Jusqu'à 4 joueurs : 2 sur le clavier, les autres à la manette (Gamepad API). Touches reconfigurables.
+- **Course** par double appui sur une direction latérale. On freine avec la direction opposée.
+- **Techniques spéciales** saisies comme dans LF2 : `D` puis direction puis `A` ou `J`, soit D→A, D→J, D↑A, D↑J, D↓A, D↓J. Un tampon d'entrée tolère un léger décalage. La direction de la commande oriente le personnage.
+- Actions contextuelles : roulade (D pendant la course), saut en course, attaque en course, attaque sautée, saisie automatique d'un ennemi étourdi au contact, projection (direction + A pendant la saisie), ramassage et lancer d'objets avec A.
+
+### 5.2 Système de frames façon LF2 (piloté par les données)
+- Chaque personnage est décrit par un **fichier de données** (JSON), dans l'esprit des `.dat` de LF2 : une liste d'images avec pour chacune la pose ou le sprite, la durée (`wait`), l'image suivante (`next`), le déplacement (`dvx`, `dvy`, `dvz`), l'état, le coût en MP, le son, et les points d'apparition d'objets ou de projectiles (`opoint`).
+- **Boîtes** par image : `bdy` (zone de corps, touchable) et `itr` (zone d'interaction : coup, saisie, ramassage). Chaque `itr` porte ses dégâts, son recul (`dvx`, `dvy`), sa valeur de chute (`fall`), sa valeur d'usure de garde (`bdefend`), son délai avant de pouvoir retoucher (`arest`/`vrest`) et son type (coup, saisie forcée, renvoi de projectile…).
+- Un **éditeur ou visualiseur de frames** en bac à sable affiche les boîtes `bdy` et `itr` par-dessus le sprite, pour régler les combats.
+
+### 5.3 Règles de combat
+- **PV (HP) en deux couches** : la partie rouge foncé, les PV récupérables, remonte lentement jusqu'à une limite qui baisse à chaque coup reçu. **MP** qui se régénère avec le temps (et plus vite quand les PV sont bas), consommés par les spéciaux.
+- **Accumulation de « fall »** : sous 40 le personnage encaisse, au-delà de 40 il est **étourdi** (dizzy) et peut être saisi, au-delà de 60 il **tombe**. La valeur redescend avec le temps. Tout coup reçu en l'air fait tomber.
+- **Garde** : D bloque les coups de face et réduit fortement les dégâts. Une jauge d'usure (`bdefend`) peut **briser la garde**.
+- **Hit-stop** (gel de 2 à 8 images) sur l'attaquant et la victime à chaque impact, avec secousse de l'écran pour les gros coups et étincelles d'impact.
+- **Projections** : un corps projeté blesse les ennemis qu'il percute. Possibilité de **frapper un adversaire en train de tomber** (jonglage limité).
+- **Invincibilité** brève au relevé. Les projectiles s'annulent quand ils se percutent.
+- **Équipes** : le friendly fire est désactivé entre coéquipiers.
+
+### 5.4 Objets et armes (comme dans LF2)
+Armes légères ramassables et lançables (bâton, pierre, bouteille…), objets lourds à soulever à deux mains (caisse, rocher), et consommables (lait qui rend des PV, une boisson qui rend des MP). Les objets ont leurs propres frames et boîtes, et rebondissent et se brisent au sol.
+
+### 5.5 Personnages, IA et modes
+- **Au moins 4 combattants jouables** au départ, chacun avec son jeu de coups de base et 3 à 5 spéciaux : projectile, charge, uppercut, saisie spéciale, technique de zone. Les données sont structurées pour en ajouter facilement.
+- **IA « CPU »** à plusieurs niveaux de difficulté : approche, alignement en profondeur, combos, garde, utilisation des spéciaux selon les MP, ramassage d'objets.
+- **Modes** : **VS** (chacun contre tous ou par équipes, joueurs et CPU), **Stage** (progression par vagues d'ennemis sur des niveaux qui défilent, avec un boss) et **Survie**.
+- Écrans : sélection des personnages (choix du nombre de CPU et des équipes), résultats de fin de partie. L'interface reste sobre, son habillage final viendra plus tard.
+
+## 6. Jalons (chacun validé par l'utilisateur sur captures)
 1. **Noyau** : renderer, caméra diorama, une plateforme de tuiles texturées, un sprite statique éclairé avec ombre. → Captures.
 2. **Pipeline sprites** : chargement des planches PNG, animations à durées par image, 4 directions, normal maps automatiques, ombres, flash au coup. → Planche d'animations et GIF.
 3. **Lumière** : soleil, ombres, point lights en pool, cycle jour/nuit (heure dorée et nuit). → Captures à 4 heures de la journée.
 4. **Post-process** : DOF bokeh, bloom, étalonnage, vignettage. → Comparaison avant/après.
-5. **Kit d'environnement** : falaises, escaliers, maisons, arbres, herbe instanciée, eau, cascade. → Scène « village ».
-6. **Polish** : particules, god rays, réglage fin des paramètres en comparant côte à côte avec Octopath. → Captures finales, plus mesure des fps.
+5. **Kit d'environnement** : falaises, escaliers, maisons, arbres, herbe instanciée, eau, cascade. → Scène « village » transformée en arène de combat à défilement latéral.
+6. **Polish graphique** : particules, god rays, réglage fin des paramètres en comparant côte à côte avec Octopath. → Captures finales, plus mesure des fps.
+7. **Noyau de combat LF2** : système de frames JSON, boîtes `bdy`/`itr`, déplacements (marche, course, sauts), combos A, garde, dégâts, fall et dizzy, chute et relevé, hit-stop, visualiseur de boîtes. → Vidéo ou GIF d'un duel, plus captures du visualiseur.
+8. **Contenu LF2** : commandes D+direction+A/J, spéciaux et projectiles, saisies et projections, objets et armes, 4 personnages. → Captures et GIF de chaque spécial.
+9. **IA et modes** : CPU, modes VS, Stage et Survie, coop à 4 en local, sélection et résultats. → Captures d'une partie à 4.
 
-## 6. Règles de travail
+## 7. Règles de travail
 - **Ne copie aucun code ni asset** de Lumina, ni de projets sans licence compatible. Réécris tout de ton côté.
 - Les **assets de personnages** viennent de sources à la licence vérifiée (CC0 ou équivalent), sont commandés, ou sont fournis par l'utilisateur. Documente la licence de chaque asset dans `assets/LICENSES.md`.
 - Après chaque jalon, **envoie les captures à l'utilisateur et attends sa validation** avant de continuer.
-- Pas de particules « pixel » qui polluent l'écran sans éclairage. L'interface reste hors périmètre pour l'instant.
+- Pas de particules « pixel » qui polluent l'écran sans éclairage. L'habillage final de l'interface reste hors périmètre pour l'instant.
+- Le gameplay reprend les **mécaniques** de LF2, jamais ses personnages, ses sprites, ses sons ni ses noms.
+- Vérifie la « sensation » LF2 en jouant réellement : rythme des combos, durée du hit-stop, portée et vitesse des déplacements. Teste aussi avec des scénarios automatisés (entrées simulées image par image).
