@@ -2,9 +2,7 @@ import * as THREE from 'three';
 import { Engine } from './engine/core/Engine.js';
 import { buildTerrain, box } from './engine/world/Diorama.js';
 import { cobblestone, grass, cliff, wood } from './engine/pixel/textures.js';
-import { Sprite3D } from './engine/sprite/Sprite3D.js';
-import { renderSprite } from './engine/sprite/sdfRender.js';
-import { KARATEKA, POSES } from './game/fighters/karateka.js';
+import { Sprite3D, loadSprite } from './engine/sprite/Sprite3D.js';
 
 const engine = new Engine(document.getElementById('app'));
 const { scene } = engine;
@@ -82,15 +80,18 @@ sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 2.5
 scene.add(sun, sun.target);
 scene.add(new THREE.HemisphereLight('#7f9ae0', '#4a3022', 0.7));
 
-// ---------- fighters (volumetric model rendered to pixel art) ----------
-const pivotX = KARATEKA.origin[0] / KARATEKA.w;
-const pivotY = (KARATEKA.h - KARATEKA.origin[1]) / KARATEKA.h; // sprite rows below the feet
-const a = new Sprite3D(renderSprite(KARATEKA, POSES.guard), { pivotX, pivotY });
-a.position.set(10.6, 0, 6.6);
-const b = new Sprite3D(renderSprite(KARATEKA, POSES.punch), { pivotX, pivotY, flip: true });
-b.position.set(13.4, 0, 6.2);
-scene.add(a, b);
-const sprites = [a, b];
+// ---------- fighters: sprites supplied by the artist (public/sprites/*.png) ----------
+// Each PNG is one frame on a transparent background, character facing right, feet on the bottom row.
+const sprites = [];
+const fighterSlots = [{ file: 'p1.png', x: 10.6, z: 6.6, flip: false }, { file: 'p2.png', x: 13.4, z: 6.2, flip: true }];
+for (const slot of fighterSlots) {
+  loadSprite(`/sprites/${slot.file}`).then((px) => {
+    const s = new Sprite3D(px, { pivotX: 0.5, flip: slot.flip });
+    s.position.set(slot.x, 0, slot.z);
+    scene.add(s);
+    sprites.push(s);
+  }).catch(() => { /* no sprite supplied yet */ });
+}
 
 // ?zoom=1 : close-up camera for inspecting sprites
 const q = new URLSearchParams(location.search);

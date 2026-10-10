@@ -1,19 +1,35 @@
 import * as THREE from 'three';
-import { PixelCanvas, hex } from '../pixel/PixelCanvas.js';
+import { PixelCanvas } from '../pixel/PixelCanvas.js';
 import { PPU } from '../constants.js';
 
-/** Build a PixelCanvas from a hand-made frame (array of strings + palette). */
-export function frameToPixels(rows, palette) {
-  const h = rows.length, w = Math.max(...rows.map((r) => r.length));
+/** Copy a loaded image (or a w×h region of it, for sprite sheets) into a PixelCanvas. */
+export function imageToPixels(img, sx = 0, sy = 0, w = img.width, h = img.height) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.drawImage(img, sx, sy, w, h, 0, 0, w, h);
+  const src = g.getImageData(0, 0, w, h).data;
   const pc = new PixelCanvas(w, h);
-  const cols = Object.fromEntries(Object.entries(palette).map(([k, v]) => [k, hex(v)]));
-  rows.forEach((row, y) => {
-    for (let x = 0; x < row.length; x++) {
-      const c = cols[row[x]];
-      if (c) pc.set(x, y, c, 255);
-    }
+  for (let i = 0; i < w * h; i++) {
+    if (src[i * 4 + 3] >= 128) pc.set(i % w, (i / w) | 0, [src[i * 4], src[i * 4 + 1], src[i * 4 + 2]], 255);
+  }
+  autoBevel(pc);
+  return pc;
+}
+
+/** Load a PNG sprite (transparent background) as a PixelCanvas. */
+export function loadSprite(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(imageToPixels(img));
+    img.onerror = () => reject(new Error(`sprite not found: ${url}`));
+    img.src = url;
   });
-  // height for the auto normal map: distance to the silhouette edge (a soft 2-3 px bevel)
+}
+
+/** height for the auto normal map: distance to the silhouette edge (a soft 2-3 px bevel) */
+function autoBevel(pc) {
+  const { w, h } = pc;
   const inside = (x, y) => x >= 0 && y >= 0 && x < w && y < h && pc.data[(y * w + x) * 4 + 3] > 0;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     if (!inside(x, y)) continue;
@@ -27,23 +43,6 @@ export function frameToPixels(rows, palette) {
     const lum = (pc.data[(y * w + x) * 4] + pc.data[(y * w + x) * 4 + 1] + pc.data[(y * w + x) * 4 + 2]) / 765;
     pc.setH(x, y, d / 3 * 0.8 + lum * 0.2);
   }
-  return pc;
-}
-
-/** normal map straight from the renderer's view-space normals (softened: shading is partly baked) */
-function normalsTexture(pc, amount = 0.6) {
-  const { w, h, normals, mask } = pc;
-  const data = new Uint8Array(w * h * 4);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const i = y * w + x, o = ((h - 1 - y) * w + x) * 4; // DataTexture rows start at the bottom
-    let n = [0, 0, 1];
-    if (mask[i] >= 0) n = [normals[i * 3] * amount, normals[i * 3 + 1] * amount, 1 - amount + normals[i * 3 + 2] * amount];
-    const l = Math.hypot(n[0], n[1], n[2]) || 1;
-    data[o] = (n[0] / l * 0.5 + 0.5) * 255; data[o + 1] = (n[1] / l * 0.5 + 0.5) * 255; data[o + 2] = (n[2] / l * 0.5 + 0.5) * 255; data[o + 3] = 255;
-  }
-  const t = new THREE.DataTexture(data, w, h);
-  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.needsUpdate = true;
-  return t;
 }
 
 /**
@@ -58,17 +57,14 @@ export class Sprite3D extends THREE.Group {
     const w = pixels.w / PPU, h = pixels.h / PPU;
     const map = pixels.toTexture({ repeat: false });
     map.minFilter = THREE.NearestFilter; map.generateMipmaps = false;
-    // volumetric sprites carry their real per-pixel normals; hand-made ones get a bevel from the silhouette
-    const normalMap = pixels.normals ? normalsTexture(pixels, 0.3) : pixels.toNormalTexture({ strength: 1.6, wrap: false });
+    const normalMap = pixels.toNormalTexture({ strength: 1.6, wrap: false });
     normalMap.minFilter = THREE.NearestFilter; normalMap.generateMipmaps = false;
     const geo = new THREE.PlaneGeometry(w, h);
     geo.translate((0.5 - pivotX) * w, h / 2 - pivotY * h, 0); // pivotY: feet height (fraction from the bottom)
     this.uniforms = { uNormalUp: { value: 0.45 }, uFlash: { value: 0 } };
     const mat = new THREE.MeshLambertMaterial({ map, normalMap, alphaTest: 0.5, side: THREE.DoubleSide });
-    if (pixels.normals) {
-      // shading is already painted into the sprite: the scene only tints it, so keep part of it self-lit
-      mat.emissive.set('#ffffff'); mat.emissiveMap = map; mat.emissiveIntensity = 0.38;
-    }
+    // shading is already painted into the sprite: the scene only tints it, so keep part of it self-lit
+    mat.emissive.set('#ffffff'); mat.emissiveMap = map; mat.emissiveIntensity = 0.38;
     mat.normalScale.set(1, 1);
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.uniforms);
