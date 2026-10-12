@@ -31,7 +31,7 @@ const html = `<title>Dojo Heroes</title>
   #app canvas { display: block; width: 100%; height: 100%; }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/build/three.module.js" } }</script>
 <script>window.__ASSETS = ${JSON.stringify(assets)};</script>
 <div id="app"></div>

@@ -61,11 +61,11 @@ export class Sprite3D extends THREE.Group {
     const [cols, rows] = grid;
     this.grid = grid;
     const w = pixels.w / cols / ppu, h = pixels.h / rows / ppu; // ppu: sprite pixels per world unit
-    const map = pixels.toTexture({ repeat: false });
-    map.minFilter = THREE.NearestFilter; map.generateMipmaps = false;
-    const normalMap = pixels.toNormalTexture({ strength: 1.6, wrap: false });
-    normalMap.minFilter = THREE.NearestFilter; normalMap.generateMipmaps = false;
+    // textures are built once per sheet; each sprite gets clones (same GPU image, own frame offset)
+    const prep = prepareTextures(pixels);
+    const map = prep.map.clone(), normalMap = prep.normalMap.clone();
     this.maps = [map, normalMap];
+    this.size = [w, h];
     for (const t of this.maps) t.repeat.set(1 / cols, 1 / rows);
     const geo = new THREE.PlaneGeometry(w, h);
     geo.translate((0.5 - pivotX) * w, h / 2 - pivotY * h, 0); // pivotY: feet height (fraction from the bottom)
@@ -115,6 +115,17 @@ export class Sprite3D extends THREE.Group {
     const dx = camera.position.x - this.position.x, dz = camera.position.z - this.position.z;
     this.mesh.rotation.y = Math.atan2(dx, dz);
   }
+}
+
+/** colour + normal textures of a sheet, cached on the PixelCanvas */
+export function prepareTextures(pixels) {
+  if (pixels.prepared) return pixels.prepared;
+  const map = pixels.toTexture({ repeat: false });
+  map.minFilter = THREE.NearestFilter; map.generateMipmaps = false;
+  const normalMap = pixels.toNormalTexture({ strength: 1.6, wrap: false });
+  normalMap.minFilter = THREE.NearestFilter; normalMap.generateMipmaps = false;
+  pixels.prepared = { map, normalMap };
+  return pixels.prepared;
 }
 
 let blobTex = null;

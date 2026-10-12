@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { Engine } from './engine/core/Engine.js';
 import { buildTerrain, box } from './engine/world/Diorama.js';
 import { cobblestone, grass, cliff, wood } from './engine/pixel/textures.js';
-import { loadSheet, recolor, blueToRed } from './engine/sprite/SpriteSheet.js';
-import { Fighter } from './game/Fighter.js';
+import { loadSheet } from './engine/sprite/SpriteSheet.js';
 import { KeyboardInput } from './game/Input.js';
-import { CpuAI } from './game/AI.js';
-import { Hud } from './game/Hud.js';
+import { CHARACTERS } from './game/characters.js';
+import { Battle } from './game/Battle.js';
+import { TitleScreen, SelectScreen, ResultScreen } from './game/Screens.js';
 
 const engine = new Engine(document.getElementById('app'));
 const { scene } = engine;
@@ -84,53 +84,55 @@ sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 2.5
 scene.add(sun, sun.target);
 scene.add(new THREE.HemisphereLight('#7f9ae0', '#4a3022', 0.7));
 
-// ---------- playable test: P1 (keyboard) vs CPU, LF2-style ----------
+// ---------- game loop, LF2 flow: title -> select -> VS battle -> results ----------
+// ?demo=1 : CPU vs CPU straight away (for screenshots); ?screen=select : open the select screen
 const q = new URLSearchParams(location.search);
-const demo = q.has('demo'); // both fighters CPU-controlled (for screenshots)
-const sheet = await loadSheet('/sprites/karateka');
-const p1 = new Fighter(sheet, { name: 'KARATÉKA', x: 9.5, z: 6.6, face: 1 });
-const p2 = new Fighter(recolor(sheet, blueToRed), { name: 'CPU', x: 14.5, z: 6.4, face: -1 });
-const fighters = [p1, p2];
-for (const f of fighters) scene.add(f.sprite);
+const demo = q.has('demo');
+const sheets = new Map(await Promise.all(CHARACTERS.map(async (c) => [c.id, await loadSheet(c.sheet)])));
 const keyboard = new KeyboardInput();
-const ai2 = new CpuAI(p2, { aggression: 0.55 });
-const ai1 = demo ? new CpuAI(p1, { aggression: 0.8 }) : null;
-const hud = new Hud(['P1 KARATEKA', 'CPU KARATEKA']);
 
-// hit-stop: freeze both fighters for a few frames on impact (LF2 feel)
-let freeze = 0, over = false, restartT = 0;
-for (const f of fighters) f.onHit = (target, a) => { freeze = a.fall >= 60 ? 0.11 : 0.07; };
+let state = null, screen = null, battle = null, lastSetup = null, lastCfg = null;
+const homeCamera = () => { engine.target.set(12, 0, 6.5); engine.distance = 24; engine.updateCamera(); };
 
-function reset() {
-  Object.assign(p1, { x: 9.5, z: 6.6, y: 0, vx: 0, vy: 0, vz: 0, face: 1, hp: 100, shownHp: 100, tilt: 0, fallPts: 0 });
-  Object.assign(p2, { x: 14.5, z: 6.4, y: 0, vx: 0, vy: 0, vz: 0, face: -1, hp: 100, shownHp: 100, tilt: 0, fallPts: 0 });
-  for (const f of fighters) f.setState('idle');
-  over = false; hud.message('');
+function go(next) {
+  screen?.dispose(); screen = null;
+  if (battle && next !== 'battle') { battle.dispose(); battle = null; homeCamera(); }
+  state = next;
+  if (next === 'title') screen = new TitleScreen();
+  if (next === 'select') screen = new SelectScreen(sheets, lastCfg);
+  if (next === 'battle') battle = new Battle(lastSetup, sheets, engine, demo);
 }
-window.addEventListener('keydown', (e) => { if (e.code === 'KeyR') reset(); });
 
-engine.distance = 21;
+if (demo) {
+  lastSetup = { players: [{ charId: 'vovinam', team: 0, human: true }, { charId: 'taekwondo', team: 0, human: false }], level: 'normal' };
+  go('battle');
+} else go(q.get('screen') === 'select' ? 'select' : 'title');
+
 engine.onUpdate((dt, t) => {
-  const i1 = demo ? ai1.poll(dt, p2) : keyboard.poll(dt);
-  const i2 = ai2.poll(dt, p1);
-  if (freeze > 0) freeze -= dt;
-  else {
-    p1.update(dt, over ? null : i1, [p2]);
-    p2.update(dt, over ? null : i2, [p1]);
+  const input = keyboard.poll(dt);
+  if (state === 'title' && screen.update(input) === 'select') go('select');
+  else if (state === 'select') {
+    const r = screen.update(input);
+    if (r === 'title') go('title');
+    if (r === 'fight') { const res = screen.result(); lastSetup = res; lastCfg = res.cfg; go('battle'); }
+  } else if (state === 'battle') {
+    if (battle.update(dt, input)) {
+      const { fighters, fighterSheets, winners } = battle;
+      if (demo) { battle.dispose(); battle = null; go('battle'); }
+      else { state = 'results'; battle.hud.el.hidden = true; screen = new ResultScreen(fighters, fighterSheets, winners); }
+    }
+  } else if (state === 'results') {
+    for (const f of battle.fighters) f.render(engine.camera);
+    const r = screen.update(input);
+    if (r === 'again') { screen.dispose(); screen = null; battle.dispose(); battle = null; go('battle'); }
+    if (r === 'select') go('select');
   }
-  if (!over && (p1.hp <= 0 || p2.hp <= 0)) {
-    over = true; restartT = 3.5;
-    hud.message('K.O.', p1.hp > 0 ? 'VICTOIRE !  (R pour rejouer)' : 'DEFAITE...  (R pour rejouer)');
+  if (state !== 'battle' && state !== 'results') {
+    // menus: slow drift over the diorama
+    engine.target.x = 12 + Math.sin(t * 0.15) * 3; engine.updateCamera();
   }
-  if (over && demo && (restartT -= dt) < 0) reset();
-  for (const f of fighters) f.render(engine.camera);
-  hud.update(dt, fighters);
-  // camera follows the fight
-  const mid = (p1.x + p2.x) / 2;
-  engine.target.x += (Math.min(16, Math.max(8, mid)) - engine.target.x) * Math.min(1, dt * 3);
-  engine.updateCamera();
   for (const l of lanterns) l.L.intensity = l.base * (0.88 + 0.08 * Math.sin(t * 9 + l.seed) + 0.05 * Math.sin(t * 23 + l.seed * 2));
 });
 engine.start();
-window.__game = { p1, p2, reset };
+window.__game = { get battle() { return battle; }, get state() { return state; }, go };
 window.__ready = true;

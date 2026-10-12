@@ -1,47 +1,62 @@
-// Retro pixel HUD (DOM overlay): two HP bars with a damage trail, round message, controls help.
+// Battle HUD, LF2 layout: one panel per fighter along the top with portrait, HP (bright red,
+// with the recoverable part in dark red) and MP (blue). Plus the round banner and controls help.
+import { portrait } from './portrait.js';
+
 const CSS = `
-#hud { position: fixed; inset: 0; pointer-events: none; font-family: 'Press Start 2P', monospace; color: #fff8e8;
-  text-shadow: 2px 2px 0 #1a1020; image-rendering: pixelated; }
-#hud .bar { position: absolute; top: 22px; width: min(38vw, 560px); }
-#hud .bar.p1 { left: 24px; } #hud .bar.p2 { right: 24px; text-align: right; }
-#hud .name { font-size: 13px; margin-bottom: 8px; letter-spacing: 1px; }
-#hud .frame { height: 18px; background: #1a1020; padding: 3px; box-shadow: 0 0 0 3px #e8d8b0, 0 0 0 6px #1a1020; }
-#hud .track { position: relative; height: 100%; background: #3a1a2a; overflow: hidden; }
-#hud .trail, #hud .hp { position: absolute; top: 0; bottom: 0; }
-#hud .p1 .trail, #hud .p1 .hp { left: 0; } #hud .p2 .trail, #hud .p2 .hp { right: 0; }
-#hud .trail { background: #ffd060; }
-#hud .hp { background: linear-gradient(#9cf58a 0 35%, #4fc24a 35% 75%, #2e8a3a 75%); }
-#hud .hp.low { background: linear-gradient(#ffb070 0 35%, #f05a3a 35% 75%, #a8302a 75%); }
-#hud .msg { position: absolute; top: 38%; width: 100%; text-align: center; font-size: 56px; color: #ffe070;
-  text-shadow: 4px 4px 0 #a03020, 8px 8px 0 #1a1020; display: none; }
-#hud .sub { position: absolute; top: calc(38% + 90px); width: 100%; text-align: center; font-size: 14px; display: none; }
-#hud .help { position: absolute; bottom: 16px; width: 100%; text-align: center; font-size: 10px; line-height: 18px; opacity: 0.9; }
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; font-family: 'Press Start 2P', monospace; color: #fff6e0;
+  text-shadow: 2px 2px 0 #140c1a; }
+#hud .panels { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+#hud .pl { flex: 1 1 210px; max-width: 330px; display: flex; gap: 8px; padding: 6px; background: rgba(20, 12, 26, 0.72);
+  border: 3px solid #e8d8b0; box-shadow: 0 0 0 3px #140c1a; }
+#hud .pl canvas { width: 52px; height: 52px; image-rendering: pixelated; background: #2a1c34; border: 2px solid #140c1a; }
+#hud .pl .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+#hud .pl .nm { font: 20px 'VT323', monospace; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hud .pl .nm b { font-weight: normal; color: var(--c); }
+#hud .bar { position: relative; height: 9px; background: #0c0710; border: 2px solid #140c1a; }
+#hud .bar div { position: absolute; left: 0; top: 0; bottom: 0; }
+#hud .hp .dark { background: #6e1620; } #hud .hp .cur { background: linear-gradient(#ff8a7a 0 30%, #e8302c 30% 80%, #a01818 80%); }
+#hud .mp .cur { background: linear-gradient(#9fd2ff 0 30%, #3a7cf0 30% 80%, #1f46a8 80%); }
+#hud .pl.out { opacity: 0.45; }
+#hud .banner { position: absolute; top: 36%; width: 100%; text-align: center; font-size: clamp(28px, 6vw, 60px); color: #ffe070;
+  text-shadow: 4px 4px 0 #a03020, 8px 8px 0 #140c1a; }
+#hud .help { position: absolute; bottom: 12px; width: 100%; text-align: center; font-size: 9px; line-height: 16px; opacity: 0.85; }
 `;
 
 export class Hud {
-  constructor(names) {
-    const st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
+  constructor(fighters, sheets) {
+    if (!document.getElementById('hud-css')) {
+      const st = document.createElement('style'); st.id = 'hud-css'; st.textContent = CSS; document.head.appendChild(st);
+    }
     const el = document.createElement('div'); el.id = 'hud';
-    el.innerHTML = ['p1', 'p2'].map((p, i) => `<div class="bar ${p}"><div class="name">${names[i]}</div>
-      <div class="frame"><div class="track"><div class="trail"></div><div class="hp"></div></div></div></div>`).join('')
-      + `<div class="msg"></div><div class="sub"></div>
-      <div class="help">FLECHES / ZQSD : bouger &nbsp; 2x GAUCHE/DROITE : courir &nbsp; J : poing &nbsp; L : pied &nbsp; K / ESPACE : sauter (+J/L en l'air : coup de pied saute) &nbsp; R : rejouer</div>`;
+    el.innerHTML = `<div class="panels"></div><div class="banner" hidden></div>
+      <div class="help">J : ATTAQUE &nbsp; K : SAUT &nbsp; L : DEFENSE &nbsp; 2x GAUCHE/DROITE : COURIR &nbsp; L puis AVANT puis J / L puis HAUT puis K : COUPS SPECIAUX</div>`;
     document.body.appendChild(el);
     this.el = el;
-    this.bars = ['p1', 'p2'].map((p) => ({ hp: el.querySelector(`.${p} .hp`), trail: el.querySelector(`.${p} .trail`) }));
-    this.msg = el.querySelector('.msg'); this.sub = el.querySelector('.sub');
-  }
-  update(dt, fighters) {
-    fighters.forEach((f, i) => {
-      f.shownHp += (f.hp - f.shownHp) * Math.min(1, dt * 2.5); // trail catches up
-      const b = this.bars[i];
-      b.hp.style.width = `${(f.hp / f.maxHp) * 100}%`;
-      b.trail.style.width = `${(Math.max(f.hp, f.shownHp) / f.maxHp) * 100}%`;
-      b.hp.classList.toggle('low', f.hp < f.maxHp * 0.3);
+    const panels = el.querySelector('.panels');
+    this.rows = fighters.map((f) => {
+      const p = document.createElement('div'); p.className = 'pl';
+      p.style.setProperty('--c', f.def.color);
+      p.appendChild(portrait(sheets.get(f), 52));
+      const info = document.createElement('div'); info.className = 'info';
+      const who = f.human ? 'J1' : 'CPU';
+      const team = f.team ? ` · É${f.team}` : '';
+      info.innerHTML = `<div class="nm"><b>${who}</b> ${f.def.fullName}${team}</div>
+        <div class="bar hp"><div class="dark"></div><div class="cur"></div></div><div class="bar mp"><div class="cur"></div></div>`;
+      p.appendChild(info);
+      panels.appendChild(p);
+      return { f, p, dark: info.querySelector('.hp .dark'), hp: info.querySelector('.hp .cur'), mp: info.querySelector('.mp .cur') };
     });
+    this.banner = el.querySelector('.banner');
   }
-  message(text, sub = '') {
-    this.msg.textContent = text; this.msg.style.display = text ? 'block' : 'none';
-    this.sub.textContent = sub; this.sub.style.display = sub ? 'block' : 'none';
+  update() {
+    for (const r of this.rows) {
+      const f = r.f;
+      r.dark.style.width = `${(f.hpDark / f.maxHp) * 100}%`;
+      r.hp.style.width = `${(f.shownHp / f.maxHp) * 100}%`;
+      r.mp.style.width = `${(f.mp / f.maxMp) * 100}%`;
+      r.p.classList.toggle('out', !f.alive);
+    }
   }
+  message(text) { this.banner.textContent = text; this.banner.hidden = !text; }
+  dispose() { this.el.remove(); }
 }

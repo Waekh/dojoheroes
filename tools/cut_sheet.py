@@ -1,7 +1,8 @@
 """Cut an artist sprite sheet into game cells WITHOUT altering the art.
 
-The character pixels are copied 1:1 (no resampling, no palette change). Only the background
-is made transparent (a baked-in checkerboard / flat light background), then each pose is
+The character pixels are copied 1:1 (no resampling, no palette change). Sheets with real
+transparency keep their alpha; otherwise the background (a baked-in checkerboard / flat light
+background) is made transparent and its halo removed. Then each pose is
 placed in a uniform cell: same ground line per row, same horizontal anchor per column.
 
 writes <out>.png + <out>.json ({ cell, anchor, anims: { name: { row, frames } } })
@@ -62,8 +63,15 @@ def defringe(rgb, solid, passes=3):
     return solid
 
 def main(src, out):
-    rgb = np.array(Image.open(src).convert('RGB'))
-    solid = defringe(rgb, ~background_mask(rgb))
+    img = Image.open(src)
+    rgba = np.array(img.convert('RGBA'))
+    rgb = rgba[:, :, :3]
+    if (rgba[:, :, 3] < 128).mean() > 0.2:
+        # real transparency: keep the artist's alpha as is (threshold only), no background guessing
+        solid = rgba[:, :, 3] >= 128
+    else:
+        # flat / checkerboard background baked into the image
+        solid = defringe(rgb, ~background_mask(rgb))
     lab, _ = ndimage.label(ndimage.binary_dilation(solid, iterations=2))
     poses = []
     for i, sl in enumerate(ndimage.find_objects(lab)):
