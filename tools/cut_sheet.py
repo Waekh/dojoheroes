@@ -28,9 +28,27 @@ def background_mask(rgb):
         bg |= halo & ndimage.binary_dilation(bg)
     return bg
 
+def defringe(rgb, solid, passes=3):
+    """Drop the light halo left by the old background around the silhouette.
+    Only removes edge pixels (never recolours): an edge pixel goes if it is light and clearly
+    lighter than the solid pixels just inside it, so light-grey parts (shoe soles) stay."""
+    lum = rgb.astype(np.float32) @ np.array([0.299, 0.587, 0.114], np.float32)
+    sat = rgb.max(2).astype(int) - rgb.min(2).astype(int)
+    k = np.ones((3, 3), np.float32)
+    for _ in range(passes):
+        edge = solid & ndimage.binary_dilation(~solid)
+        inner = solid & ~edge
+        n = ndimage.convolve(inner.astype(np.float32), k, mode='constant')
+        inner_lum = ndimage.convolve(np.where(inner, lum, 0), k, mode='constant') / np.maximum(n, 1)
+        halo = edge & (lum > 120) & (sat < 70) & ((n == 0) | (lum - inner_lum > 35))
+        if not halo.any():
+            break
+        solid = solid & ~halo
+    return solid
+
 def main(src, out):
     rgb = np.array(Image.open(src).convert('RGB'))
-    solid = ~background_mask(rgb)
+    solid = defringe(rgb, ~background_mask(rgb))
     lab, _ = ndimage.label(ndimage.binary_dilation(solid, iterations=2))
     poses = []
     for i, sl in enumerate(ndimage.find_objects(lab)):

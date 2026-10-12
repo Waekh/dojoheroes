@@ -1,15 +1,18 @@
-// Sprite sheets sliced by tools/slice_sheet.py: <name>.png (uniform cells, one row per animation)
+// Sprite sheets cut by tools/cut_sheet.py: <name>.png (uniform cells, one row per animation)
 // plus <name>.json ({ cell: [w, h], anchor: [x, y] feet point in the cell, anims: { name: { row, frames } } }).
 import { imageToPixels } from './Sprite3D.js';
 
+// a standalone build can embed assets: window.__ASSETS = { '/sprites/x.json': {...}, '/sprites/x.png': 'data:...' }
+const embedded = (path) => window.__ASSETS?.[path];
+
 export async function loadSheet(base) {
   const [meta, img] = await Promise.all([
-    fetch(`${base}.json`).then((r) => r.json()),
+    embedded(`${base}.json`) ?? fetch(`${base}.json`).then((r) => r.json()),
     new Promise((res, rej) => {
       const i = new Image();
       i.onload = () => res(i);
       i.onerror = () => rej(new Error(`sheet not found: ${base}.png`));
-      i.src = `${base}.png`;
+      i.src = embedded(`${base}.png`) ?? `${base}.png`;
     }),
   ]);
   const cols = Math.round(img.width / meta.cell[0]), rows = Math.round(img.height / meta.cell[1]);
