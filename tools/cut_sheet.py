@@ -34,16 +34,31 @@ def defringe(rgb, solid, passes=3):
     lighter than the solid pixels just inside it, so light-grey parts (shoe soles) stay."""
     lum = rgb.astype(np.float32) @ np.array([0.299, 0.587, 0.114], np.float32)
     sat = rgb.max(2).astype(int) - rgb.min(2).astype(int)
+    mn = rgb.min(2).astype(int)
     k = np.ones((3, 3), np.float32)
     for _ in range(passes):
         edge = solid & ndimage.binary_dilation(~solid)
         inner = solid & ~edge
         n = ndimage.convolve(inner.astype(np.float32), k, mode='constant')
         inner_lum = ndimage.convolve(np.where(inner, lum, 0), k, mode='constant') / np.maximum(n, 1)
-        halo = edge & (lum > 120) & (sat < 70) & ((n == 0) | (lum - inner_lum > 35))
+        # light pixels tinted by the neighbouring colour (bluish-white on the gi, pinkish-white on skin)
+        halo = edge & (((mn >= 150) & ((n == 0) | (lum - inner_lum > 20))) | ((lum > 120) & (sat < 70) & (lum - inner_lum > 35)))
         if not halo.any():
             break
         solid = solid & ~halo
+    # small white blobs touching the outside and wedged between saturated colours (skin / cloth / belt)
+    # are trapped background; white bits among greys (shoe highlights) are real art and stay
+    white = solid & (mn >= 180) & (sat <= 60)
+    lab, n = ndimage.label(white)
+    outside = ndimage.binary_dilation(~solid)
+    for i in range(1, n + 1):
+        blob = lab == i
+        if blob.sum() > 25 or not (blob & outside).any():
+            continue
+        ring = ndimage.binary_dilation(blob) & solid & ~blob
+        grey_material = (sat[ring] < 30) & (lum[ring] > 110) & (lum[ring] < 225)
+        if ring.any() and grey_material.mean() < 0.3:
+            solid = solid & ~blob
     return solid
 
 def main(src, out):
