@@ -1,10 +1,11 @@
 # Sprites des personnages
 
-Déposer ici les sprites fournis (PNG, fond transparent).
+Planches fournies par l'artiste, découpées sans modifier les pixels par :
 
-- 1 fichier = 1 image d'animation, ou une planche (sprite sheet) en grille régulière
-- personnage tourné vers la droite (le moteur fait le miroir pour la gauche)
-- pieds posés sur la dernière ligne de pixels, centrés horizontalement
-- taille libre (le moteur affiche 16 px = 1 unité de monde)
+    python3 tools/cut_sheet.py <planche.png|webp> public/sprites/<nom>
 
-`p1.png` et `p2.png` sont affichés dans la scène de test.
+Le script rend seulement le fond transparent (damier ou fond clair), puis aligne chaque pose
+dans une case de taille fixe (même ligne de sol par animation). Il écrit `<nom>.png` + `<nom>.json`.
+
+Ordre des lignes attendu : attente, marche, course, coup de poing, coup de pied, saut, coup de pied sauté.
+Personnage tourné vers la droite (le moteur fait le miroir).

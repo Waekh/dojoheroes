@@ -52,13 +52,21 @@ function autoBevel(pc) {
  * - alpha-tested, casts a real shadow, plus a soft contact shadow
  */
 export class Sprite3D extends THREE.Group {
-  constructor(pixels, { pivotX = 0.5, pivotY = 0, flip = false } = {}) {
+  /**
+   * @param {PixelCanvas} pixels a single frame, or a whole sprite sheet when `grid` is given
+   * @param {object} o { pivotX, pivotY (feet, fraction from the bottom), flip, grid: [cols, rows], blob (radius), ppu }
+   */
+  constructor(pixels, { pivotX = 0.5, pivotY = 0, flip = false, grid = [1, 1], blob: blobR, ppu = PPU } = {}) {
     super();
-    const w = pixels.w / PPU, h = pixels.h / PPU;
+    const [cols, rows] = grid;
+    this.grid = grid;
+    const w = pixels.w / cols / ppu, h = pixels.h / rows / ppu; // ppu: sprite pixels per world unit
     const map = pixels.toTexture({ repeat: false });
     map.minFilter = THREE.NearestFilter; map.generateMipmaps = false;
     const normalMap = pixels.toNormalTexture({ strength: 1.6, wrap: false });
     normalMap.minFilter = THREE.NearestFilter; normalMap.generateMipmaps = false;
+    this.maps = [map, normalMap];
+    for (const t of this.maps) t.repeat.set(1 / cols, 1 / rows);
     const geo = new THREE.PlaneGeometry(w, h);
     geo.translate((0.5 - pivotX) * w, h / 2 - pivotY * h, 0); // pivotY: feet height (fraction from the bottom)
     this.uniforms = { uNormalUp: { value: 0.45 }, uFlash: { value: 0 } };
@@ -84,14 +92,24 @@ export class Sprite3D extends THREE.Group {
     if (flip) this.mesh.scale.x = -1;
     this.add(this.mesh);
     // contact shadow blob
-    const blob = new THREE.Mesh(new THREE.CircleGeometry(w * 0.32, 24), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.55 }));
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(blobR ?? w * 0.32, 24), new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, opacity: 0.55 }));
     blob.rotation.x = -Math.PI / 2;
     blob.position.y = 0.012;
     blob.scale.set(1.25, 0.75, 1);
     blob.renderOrder = 1;
     this.add(blob);
     this.blob = blob;
+    this.setFrame(0, 0);
   }
+  /** show cell (col, row) of the sprite sheet */
+  setFrame(col, row) {
+    const [cols, rows] = this.grid;
+    for (const t of this.maps) t.offset.set(col / cols, 1 - (row + 1) / rows);
+  }
+  /** mirror the sprite horizontally (sprites are drawn facing right) */
+  setFlip(flip) { this.mesh.scale.x = flip ? -1 : 1; }
+  /** white hit flash, 0..1 */
+  set flash(v) { this.uniforms.uFlash.value = v; }
   /** keep the card facing the camera horizontally (cylindrical billboard) */
   face(camera) {
     const dx = camera.position.x - this.position.x, dz = camera.position.z - this.position.z;

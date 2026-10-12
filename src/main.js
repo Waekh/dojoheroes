@@ -2,7 +2,11 @@ import * as THREE from 'three';
 import { Engine } from './engine/core/Engine.js';
 import { buildTerrain, box } from './engine/world/Diorama.js';
 import { cobblestone, grass, cliff, wood } from './engine/pixel/textures.js';
-import { Sprite3D, loadSprite } from './engine/sprite/Sprite3D.js';
+import { loadSheet, recolor, blueToRed } from './engine/sprite/SpriteSheet.js';
+import { Fighter } from './game/Fighter.js';
+import { KeyboardInput } from './game/Input.js';
+import { CpuAI } from './game/AI.js';
+import { Hud } from './game/Hud.js';
 
 const engine = new Engine(document.getElementById('app'));
 const { scene } = engine;
@@ -80,26 +84,53 @@ sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 2.5
 scene.add(sun, sun.target);
 scene.add(new THREE.HemisphereLight('#7f9ae0', '#4a3022', 0.7));
 
-// ---------- fighters: sprites supplied by the artist (public/sprites/*.png) ----------
-// Each PNG is one frame on a transparent background, character facing right, feet on the bottom row.
-const sprites = [];
-const fighterSlots = [{ file: 'p1.png', x: 10.6, z: 6.6, flip: false }, { file: 'p2.png', x: 13.4, z: 6.2, flip: true }];
-for (const slot of fighterSlots) {
-  loadSprite(`/sprites/${slot.file}`).then((px) => {
-    const s = new Sprite3D(px, { pivotX: 0.5, flip: slot.flip });
-    s.position.set(slot.x, 0, slot.z);
-    scene.add(s);
-    sprites.push(s);
-  }).catch(() => { /* no sprite supplied yet */ });
-}
-
-// ?zoom=1 : close-up camera for inspecting sprites
+// ---------- playable test: P1 (keyboard) vs CPU, LF2-style ----------
 const q = new URLSearchParams(location.search);
-if (q.get('zoom')) { engine.distance = 11; engine.target.set(12, 1.2, 6.4); engine.updateCamera(); }
+const demo = q.has('demo'); // both fighters CPU-controlled (for screenshots)
+const sheet = await loadSheet('/sprites/karateka');
+const p1 = new Fighter(sheet, { name: 'KARATÉKA', x: 9.5, z: 6.6, face: 1 });
+const p2 = new Fighter(recolor(sheet, blueToRed), { name: 'CPU', x: 14.5, z: 6.4, face: -1 });
+const fighters = [p1, p2];
+for (const f of fighters) scene.add(f.sprite);
+const keyboard = new KeyboardInput();
+const ai2 = new CpuAI(p2, { aggression: 0.55 });
+const ai1 = demo ? new CpuAI(p1, { aggression: 0.8 }) : null;
+const hud = new Hud(['P1 KARATEKA', 'CPU KARATEKA']);
 
+// hit-stop: freeze both fighters for a few frames on impact (LF2 feel)
+let freeze = 0, over = false, restartT = 0;
+for (const f of fighters) f.onHit = (target, a) => { freeze = a.fall >= 60 ? 0.11 : 0.07; };
+
+function reset() {
+  Object.assign(p1, { x: 9.5, z: 6.6, y: 0, vx: 0, vy: 0, vz: 0, face: 1, hp: 100, shownHp: 100, tilt: 0, fallPts: 0 });
+  Object.assign(p2, { x: 14.5, z: 6.4, y: 0, vx: 0, vy: 0, vz: 0, face: -1, hp: 100, shownHp: 100, tilt: 0, fallPts: 0 });
+  for (const f of fighters) f.setState('idle');
+  over = false; hud.message('');
+}
+window.addEventListener('keydown', (e) => { if (e.code === 'KeyR') reset(); });
+
+engine.distance = 21;
 engine.onUpdate((dt, t) => {
-  for (const s of sprites) s.face(engine.camera);
+  const i1 = demo ? ai1.poll(dt, p2) : keyboard.poll(dt);
+  const i2 = ai2.poll(dt, p1);
+  if (freeze > 0) freeze -= dt;
+  else {
+    p1.update(dt, over ? null : i1, [p2]);
+    p2.update(dt, over ? null : i2, [p1]);
+  }
+  if (!over && (p1.hp <= 0 || p2.hp <= 0)) {
+    over = true; restartT = 3.5;
+    hud.message('K.O.', p1.hp > 0 ? 'VICTOIRE !  (R pour rejouer)' : 'DEFAITE...  (R pour rejouer)');
+  }
+  if (over && demo && (restartT -= dt) < 0) reset();
+  for (const f of fighters) f.render(engine.camera);
+  hud.update(dt, fighters);
+  // camera follows the fight
+  const mid = (p1.x + p2.x) / 2;
+  engine.target.x += (Math.min(16, Math.max(8, mid)) - engine.target.x) * Math.min(1, dt * 3);
+  engine.updateCamera();
   for (const l of lanterns) l.L.intensity = l.base * (0.88 + 0.08 * Math.sin(t * 9 + l.seed) + 0.05 * Math.sin(t * 23 + l.seed * 2));
 });
 engine.start();
+window.__game = { p1, p2, reset };
 window.__ready = true;
