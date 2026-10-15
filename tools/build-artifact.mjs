@@ -18,6 +18,9 @@ await build({
 });
 const js = fs.readFileSync(path.join(out, 'game.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
 const assets = {};
+for (const f of fs.readdirSync('public/art')) {
+  if (f.endsWith('.png')) assets[`/art/${f}`] = `data:image/png;base64,${fs.readFileSync(path.join('public/art', f)).toString('base64')}`;
+}
 for (const f of fs.readdirSync('public/sprites')) {
   const p = path.join('public/sprites', f);
   if (f.endsWith('.json')) assets[`/sprites/${f}`] = JSON.parse(fs.readFileSync(p, 'utf8'));

@@ -1,4 +1,4 @@
-// Roster. Sprite sheets come from the artist (public/sprites, cut by tools/cut_sheet.py); every
+// Roster. Artworks and sprite sheets come from the artist (public/sprites, cut by tools/cut_sheet.py); every
 // sheet uses the same row order: idle, walk, run, punch, kick, jump, jumpkick.
 // Damage numbers are on LF2's scale (500 HP / 500 MP).
 
@@ -12,11 +12,12 @@ const blueToRed = ([r, g, b]) => (b > r + 25 && b > g + 15 ? [Math.min(255, b * 
 export const CHARACTERS = [
   {
     id: 'vovinam',
-    name: 'Minh',
-    fullName: 'Nguyễn Văn Minh',
+    name: 'Nam',
+    fullName: 'Nam',
     style: 'Vovinam',
     country: 'Viêt Nam',
     sheet: '/sprites/vovinam',
+    art: '/art/vovinam.png',
     ppu: 46,
     color: '#3f78ff',
     altCostume: blueToRed,
@@ -34,11 +35,12 @@ export const CHARACTERS = [
   },
   {
     id: 'taekwondo',
-    name: 'Min-ji',
-    fullName: 'Kim Min-ji',
+    name: 'Kim',
+    fullName: 'Kim',
     style: 'Taekwondo',
     country: 'Corée',
     sheet: '/sprites/taekwondo',
+    art: '/art/taekwondo.png',
     ppu: 46,
     color: '#ff4060',
     altCostume: whiteToRed,
@@ -53,6 +55,11 @@ export const CHARACTERS = [
       'D^J': { name: 'Twimyeo yeop chagi', mp: 120, kind: 'flykick', vy: 10, vx: 9, dmg: 60, fall: 80, reach: [0.0, 2.3], push: 7, knock: true },
     },
   },
+];
+
+// announced fighters: artwork only, playable once their sprite sheet is supplied
+export const UPCOMING = [
+  { id: 'bjj', name: 'Ricardo', fullName: 'Ricardo', style: 'Jiu-jitsu brésilien', country: 'Brésil', art: '/art/bjj.png', color: '#c8c8d8' },
 ];
 
 export const byId = (id) => CHARACTERS.find((c) => c.id === id);

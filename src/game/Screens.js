@@ -1,7 +1,7 @@
 // Menu screens in LF2's flow: title -> character select -> (battle) -> results.
 // All screens are driven by the same intent object (tap set) as the fighters:
 // left/right change the value, ATTACK confirms, JUMP goes back.
-import { CHARACTERS } from './characters.js';
+import { CHARACTERS, UPCOMING } from './characters.js';
 import { portrait } from './portrait.js';
 
 const CSS = `
@@ -10,11 +10,29 @@ const CSS = `
   overflow-y: auto; background: radial-gradient(ellipse at 50% 40%, rgba(20, 12, 28, 0.55), rgba(8, 5, 12, 0.88));
   font-family: 'Press Start 2P', monospace; color: #fff6e0; text-shadow: 2px 2px 0 #140c1a; text-align: center; }
 .scr h1 { margin: 0; font-size: clamp(14px, 2.4vw, 22px); letter-spacing: 2px; color: #ffe070; text-shadow: 3px 3px 0 #a03020, 5px 5px 0 #140c1a; }
-.scr .logo { margin-top: 8vh; font-size: clamp(34px, 8vw, 84px); line-height: 1.1; color: #ffe070;
+.scr .logo { margin-top: 1vh; font-size: clamp(34px, 8vw, 84px); line-height: 1.1; color: #ffe070;
   text-shadow: 4px 4px 0 #c0402a, 8px 8px 0 #3a1830, 12px 12px 0 #140c1a; }
 .scr .tag { font: 26px 'VT323', monospace; color: #e8d8b0; }
 .scr .blink { animation: blink 1s steps(2) infinite; font-size: 12px; }
 @keyframes blink { 50% { opacity: 0; } }
+.lineup { display: flex; align-items: flex-end; justify-content: center; gap: clamp(8px, 3vw, 48px); height: clamp(200px, 44vh, 470px); max-width: 100%; }
+.lineup figure { margin: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0;
+  animation: rise 0.7s cubic-bezier(.2, .9, .3, 1.2) both; }
+.lineup figure:nth-child(2) { animation-delay: 0.12s; } .lineup figure:nth-child(3) { animation-delay: 0.24s; }
+.lineup img { height: calc(100% - 46px); max-width: 30vw; object-fit: contain; object-position: bottom; image-rendering: pixelated;
+  filter: drop-shadow(0 6px 0 rgba(10, 6, 14, 0.6)); }
+.lineup figcaption { font-size: clamp(9px, 1.2vw, 13px); color: #ffe070; line-height: 1.5; }
+.lineup figcaption span { display: block; font: clamp(16px, 2vw, 22px) 'VT323', monospace; color: #e8d8b0; }
+@keyframes rise { from { transform: translateY(24px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lineup figure { animation: none; } }
+.slot .art { height: 190px; display: flex; align-items: flex-end; justify-content: center; }
+.slot .art img { height: 100%; max-width: 100%; object-fit: contain; image-rendering: pixelated; }
+.slot .art .q { font-size: 64px; color: #5a4a6a; align-self: center; }
+.roster { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.roster .r { width: 86px; padding: 6px 4px 4px; background: rgba(20, 12, 26, 0.8); border: 3px solid #5a4a6a; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.roster .r img { height: 84px; image-rendering: pixelated; }
+.roster .r .n { font-size: 8px; } .roster .r.cur { border-color: #ffe070; } .roster .r.soon { opacity: 0.5; }
+.roster .r .b { font-size: 7px; color: #f07a6a; }
 @media (prefers-reduced-motion: reduce) { .scr .blink { animation: none; } }
 .scr .keys { font: 22px 'VT323', monospace; line-height: 24px; color: #d8cfe8; max-width: 640px; }
 .scr .keys b { color: #ffe070; font-weight: normal; }
@@ -53,8 +71,10 @@ class Screen {
 export class TitleScreen extends Screen {
   constructor() {
     super('title');
-    this.el.innerHTML = `<div class="logo">DOJO<br>HEROES</div>
+    const cast = [...CHARACTERS, ...UPCOMING];
+    this.el.innerHTML = `<div class="logo">DOJO HEROES</div>
       <div class="tag">Arts martiaux · combat en HD-2D</div>
+      <div class="lineup">${cast.map((c) => `<figure><img src="${art(c)}" alt="${c.name}"><figcaption>${c.name.toUpperCase()}<span>${c.style}</span></figcaption></figure>`).join('')}</div>
       <div class="blink">ATTAQUE (J) : MODE VS</div>
       <div class="keys"><b>Flèches / ZQSD</b> se déplacer · <b>J</b> attaque · <b>K</b> saut · <b>L</b> défense<br>
       <b>2× gauche/droite</b> courir · <b>course + J</b> attaque en course · <b>saut + J</b> attaque sautée<br>
@@ -62,6 +82,9 @@ export class TitleScreen extends Screen {
   }
   update(i) { return i.events.includes('attack') ? 'select' : null; }
 }
+
+/** artwork URL (a standalone build embeds the images) */
+const art = (c) => window.__ASSETS?.[c.art] ?? c.art;
 
 const TEAMS = ['Indépendant', 'Équipe 1', 'Équipe 2', 'Équipe 3', 'Équipe 4'];
 const LEVELS = [['easy', 'Facile'], ['normal', 'Normal'], ['hard', 'Difficile']];
@@ -78,7 +101,7 @@ export class SelectScreen extends Screen {
     this.steps = [];
     this.buildSteps();
     this.step = 0;
-    this.el.innerHTML = `<h1>SÉLECTION DES COMBATTANTS</h1><div class="slots"></div><div class="prompt"></div><div class="moves"></div>`;
+    this.el.innerHTML = `<h1>SÉLECTION DES COMBATTANTS</h1><div class="slots"></div><div class="roster"></div><div class="prompt"></div><div class="moves"></div>`;
     this.render();
   }
   buildSteps() {
@@ -135,8 +158,7 @@ export class SelectScreen extends Screen {
       const el = document.createElement('div');
       el.className = `slot${k === n && (kind === 'char' || kind === 'team') ? ' on' : ''}${used ? '' : ' off'}`;
       el.innerHTML = `<div class="who">${n === 0 ? 'JOUEUR 1' : `ORDINATEUR ${n}`}</div>`;
-      if (used && c.id !== 'random') el.appendChild(portrait(this.sheets.get(c.id), 128));
-      else { const ph = document.createElement('canvas'); ph.width = ph.height = 1; el.appendChild(ph); }
+      el.insertAdjacentHTML('beforeend', `<div class="art">${used && c.art ? `<img src="${art(c)}" alt="">` : `<div class="q">${used ? '?' : ''}</div>`}</div>`);
       el.insertAdjacentHTML('beforeend', used
         ? `<div class="nm">${c.fullName}</div><div class="st">${c.style}${c.country ? ` · ${c.country}` : ''}</div>
            <div class="field${k === n && kind === 'char' ? ' cur' : ''}">◀ PERSO ▶</div>
@@ -144,6 +166,12 @@ export class SelectScreen extends Screen {
         : '<div class="nm">—</div>');
       slots.appendChild(el);
     });
+    // roster strip: every announced fighter, the one being chosen highlighted
+    const chosen = kind === 'char' ? this.choices(k)[P[k].char]?.id : null;
+    this.el.querySelector('.roster').innerHTML = [...CHARACTERS, ...UPCOMING].map((c) => {
+      const soon = !c.sheet;
+      return `<div class="r${c.id === chosen ? ' cur' : ''}${soon ? ' soon' : ''}"><img src="${art(c)}" alt=""><div class="n">${c.name.toUpperCase()}</div>${soon ? '<div class="b">BIENTÔT</div>' : ''}</div>`;
+    }).join('');
     const lv = LEVELS[this.cfg.level][1];
     const prompts = {
       char: 'GAUCHE/DROITE : choisir le combattant · ATTAQUE : valider · SAUT : retour',
